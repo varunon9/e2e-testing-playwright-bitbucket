@@ -1,0 +1,46 @@
+#  Template NodeJS build
+
+#  The workflow allows running tests and code linting on each PR against master branch
+
+# source: https://github.com/microsoft/playwright/blob/main/utils/docker/Dockerfile.focal
+image: mcr.microsoft.com/playwright:v1.24.0-focal
+
+# SSL Setup: https://github.com/FiloSottile/mkcert
+
+pipelines:
+  pull-requests:
+    'master':
+      - parallel:
+          - step:
+              name: e2e integration test cases
+              caches:
+                - node
+              script:
+                - echo "127.0.0.1	localhost dev.indmoney.com" >> /etc/hosts
+                - apt update && apt install libnss3-tools
+                - curl -JLO "https://dl.filippo.io/mkcert/latest?for=linux/amd64"
+                - chmod +x mkcert-v*-linux-amd64
+                - cp mkcert-v*-linux-amd64 /usr/local/bin/mkcert
+                - mkcert -install
+                - mkcert dev.indmoney.com
+                - yarn install
+                - ./node_modules/.bin/playwright install
+                - (yarn dev&)
+                - (yarn ssl-proxy&)
+                - yarn test
+                
+          - step:
+              name: Code linting
+              script:
+                - yarn install
+                - yarn lint src
+              caches:
+                - node
+
+          - step:
+              name: Checking validity of types
+              script:
+                - yarn install
+                - ./node_modules/.bin/tsc --noEmit
+              caches:
+                - node      
